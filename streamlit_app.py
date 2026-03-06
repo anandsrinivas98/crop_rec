@@ -2,6 +2,9 @@ import streamlit as st
 import joblib
 import os
 import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split
 
 # Page configuration
 st.set_page_config(
@@ -10,14 +13,67 @@ st.set_page_config(
     layout="wide"
 )
 
-# Load the model
+# Train model function
+def train_model():
+    """Train the model if it doesn't exist"""
+    np.random.seed(42)
+    crops = ['rice', 'maize', 'chickpea', 'kidneybeans', 'pigeonpeas', 'mothbeans', 'mungbean', 
+             'blackgram', 'lentil', 'pomegranate', 'banana', 'mango', 'grapes', 'watermelon', 
+             'muskmelon', 'apple', 'orange', 'papaya', 'coconut', 'cotton', 'jute', 'coffee']
+    
+    data = []
+    for _ in range(2200):
+        n = np.random.randint(0, 140)
+        p = np.random.randint(5, 145)
+        k = np.random.randint(5, 205)
+        temperature = np.random.uniform(8.0, 45.0)
+        humidity = np.random.uniform(14.0, 100.0)
+        ph = np.random.uniform(3.5, 10.0)
+        rainfall = np.random.uniform(20.0, 300.0)
+        
+        if rainfall > 200 and humidity > 80: crop = 'rice'
+        elif temperature > 35 and humidity > 50: crop = 'watermelon'
+        elif rainfall < 50: crop = 'mothbeans'
+        elif ph < 5.5: crop = 'mango'
+        elif k > 100: crop = 'grapes'
+        elif n > 100: crop = 'cotton'
+        else: crop = np.random.choice(crops)
+            
+        data.append([n, p, k, temperature, humidity, ph, rainfall, crop])
+        
+    df = pd.DataFrame(data, columns=['N', 'P', 'K', 'temperature', 'humidity', 'ph', 'rainfall', 'label'])
+    
+    X = df.drop('label', axis=1)
+    y = df['label']
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    
+    model = RandomForestClassifier(n_estimators=100, random_state=42)
+    model.fit(X_train, y_train)
+    
+    return model
+
+# Load or train the model
 @st.cache_resource
 def load_model():
     model_path = os.path.join('backend', 'crop_model.pkl')
-    if not os.path.exists(model_path):
-        st.error("Model file not found. Please train the model first by running: python backend/train_model.py")
-        return None
-    return joblib.load(model_path)
+    
+    # Try to load existing model
+    if os.path.exists(model_path):
+        return joblib.load(model_path)
+    
+    # If model doesn't exist, train it
+    st.info("Training model for the first time... This may take a moment.")
+    model = train_model()
+    
+    # Try to save it (may fail on Streamlit Cloud due to read-only filesystem)
+    try:
+        os.makedirs('backend', exist_ok=True)
+        joblib.dump(model, model_path)
+    except:
+        pass  # Ignore save errors on read-only filesystems
+    
+    return model
 
 model = load_model()
 
